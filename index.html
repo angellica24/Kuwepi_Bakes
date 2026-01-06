@@ -1,0 +1,498 @@
+<!DOCTYPE html> 
+<html lang="id">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width,initial-scale=1" />
+<title>KUWÈPI Bakes - POS</title>
+<style>
+  body{font-family:sans-serif;background:#ffe6f0;margin:0;padding:0}
+  .hidden{display:none}
+  .wrapper{max-width:900px;margin:20px auto;padding:18px;background:#fff;border-radius:10px;box-shadow:0 2px 6px rgba(0,0,0,0.08)}
+  h1,h2{color:#d63384;text-align:center;margin:6px 0}
+  input,textarea,select,button{width:100%;padding:8px;margin:6px 0;border:1px solid #ccc;border-radius:6px;font-family:sans-serif}
+  button{background:#ff69b4;color:#fff;border:0;cursor:pointer}
+  button.secondary{background:#fff;color:#d63384;border:1px solid #ffd1e6}
+  .grid{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  .card{border:1px solid #ddd;padding:10px;border-radius:8px;text-align:center;background:#fff8fb}
+  .card img{width:100%;height:120px;object-fit:cover;border-radius:6px}
+  .cart{margin-top:15px;padding:10px;background:#fafafa;border:1px solid #ddd;border-radius:6px}
+  .summary{background:#fff8fb;padding:10px;border-radius:6px;border:1px solid #ddd}
+  ul{list-style:none;padding:0;margin:0}
+  li{margin:5px 0}
+  .center{text-align:center;margin-top:12px}
+  .qr{display:flex;justify-content:center;margin-top:10px}
+  .qr img{width:180px;height:180px;border:1px solid #ddd;border-radius:8px}
+  .flex{display:flex;gap:12px;align-items:center}
+  .admin-panel{border:1px dashed #ffd1e6;padding:12px;border-radius:8px;background:#fff0f6}
+  table{width:100%;border-collapse:collapse}
+  table th, table td{padding:8px;border:1px solid #eee;text-align:left;font-size:14px}
+  .small{font-size:13px;color:#666}
+  .muted{color:#666;font-size:13px}
+  .top-right{position:fixed;right:16px;top:12px}
+  .fade{animation:fadein .35s ease}
+  @keyframes fadein{from{opacity:0}to{opacity:1}}
+</style>
+</head>
+<body>
+
+<div class="top-right">
+  <button class="secondary" onclick="showAdminLogin()">Masuk sebagai Admin</button>
+</div>
+
+<div id="login" class="wrapper fade">
+  <h1>KUWÈPI Bakes</h1>
+  <p class="muted">Silakan isi data pelanggan untuk mulai membuat pesanan.</p>
+  <input id="nama" placeholder="Nama pelanggan" required />
+  <input id="telp" placeholder="No. telepon pelanggan" required />
+  <div class="flex">
+    <button style="flex:1" onclick="masuk()">Mulai Transaksi</button>
+    <button class="secondary" style="flex:1;margin-left:8px" onclick="showAdminLogin()">Login Admin</button>
+  </div>
+</div>
+
+<div id="app" class="wrapper hidden">
+  <h1>Selamat datang, <span id="user"></span>!</h1>
+  <div style="display:flex;gap:12px;align-items:flex-start">
+    <div style="flex:1">
+      <h3>Menu KUWÈPI Bakes</h3>
+      <div id="grid" class="grid"></div>
+    </div>
+
+    <div style="width:320px">
+      <div class="cart">
+        <h4>Keranjang</h4>
+        <div id="items" class="small"></div>
+        <strong id="total">Rp 0</strong>
+
+        <h4 style="margin-top:12px">Pembayaran (Kasir)</h4>
+        <input id="bayar" type="number" min="0" placeholder="Uang diterima (Rp)" oninput="hitungKembalian()" />
+        <div class="small">
+          <span>Kembalian: </span><strong id="kembalian">Rp 0</strong>
+        </div>
+
+        <div class="center">
+          <button onclick="bukaCheckout()">Checkout</button>
+          <button class="secondary" onclick="keluar()">Reset / Logout</button>
+        </div>
+      </div>
+
+      <div id="adminQuick" class="admin-panel hidden" style="margin-top:12px">
+        <strong>Admin mode aktif</strong>
+        <div class="small">Buka panel admin untuk kelola produk & pesanan.</div>
+        <div class="center" style="margin-top:8px">
+          <button onclick="openAdminPanel()">Buka Admin Panel</button>
+          <button class="secondary" style="margin-left:8px" onclick="logoutAdmin()">Logout Admin</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="checkout" class="wrapper hidden fade">
+  <h1>Checkout KUWÈPI Bakes</h1>
+  <div class="summary">
+    <h3>Ringkasan Pesanan</h3>
+    <ul id="ringkasan"></ul>
+    <p><strong>Total: </strong><span id="totalC"></span></p>
+  </div>
+
+  <h3>Data Pembeli</h3>
+  <input id="namaPembeli" placeholder="Nama Lengkap" required />
+  <textarea id="alamatPembeli" placeholder="Alamat Lengkap" required></textarea>
+  <input id="telpPembeli" placeholder="Nomor Telepon" required />
+
+  <h3>Metode Pembayaran</h3>
+  <select id="metode" onchange="tampilInstruksi()">
+    <option value="">-- Pilih Metode Pembayaran --</option>
+    <option value="Bank Transfer">Transfer Bank</option>
+    <option value="E-Wallet">E-Wallet</option>
+    <option value="QRIS">QRIS</option>
+    <option value="COD">COD (Bayar di Tempat)</option>
+  </select>
+
+  <div id="instruksi" class="summary fade"></div>
+
+  <div class="center">
+    <button onclick="konfirmasi()">Konfirmasi & Cetak Nota</button>
+    <button class="secondary" onclick="batalCheckout()">Kembali</button>
+  </div>
+</div>
+
+<div id="invoice" class="wrapper hidden fade">
+  <h1>KUWÈPI Bakes</h1>
+  <h2>Nota Pembelian</h2>
+
+  <div class="summary">
+    <p><strong>No. Transaksi:</strong> <span id="trx"></span></p>
+    <p><strong>Tanggal:</strong> <span id="tgl"></span></p>
+  </div>
+
+  <div class="summary" style="margin-top:10px">
+    <h3>Data Pembeli</h3>
+    <p><strong>Nama:</strong> <span id="namaI"></span></p>
+    <p><strong>Alamat:</strong> <span id="alamatI"></span></p>
+    <p><strong>Telepon:</strong> <span id="telpI"></span></p>
+  </div>
+
+  <div class="summary" style="margin-top:10px">
+    <h3>Pesanan</h3>
+    <ul id="pesananI"></ul>
+    <p><strong>Total:</strong> <span id="totalI"></span></p>
+    <p><strong>Metode Pembayaran:</strong> <span id="metodeI"></span></p>
+    <p><em>Estimasi pengiriman 2–3 hari. Tidak perlu dibayar lagi jika sudah transfer 💕</em></p>
+  </div>
+
+  <div class="center">
+    <h3>Terima kasih telah berbelanja di KUWÈPI Bakes 💖</h3>
+    <button onclick="kembaliHome()">Kembali ke Beranda</button>
+  </div>
+</div>
+
+<div id="adminPanel" class="wrapper hidden fade">
+  <h1>Admin Panel - KUWÈPI Bakes</h1>
+  <div style="display:flex;gap:12px">
+    <div style="flex:1">
+      <h3>Kelola Produk</h3>
+      <div style="margin-bottom:8px">
+        <input id="prodNama" placeholder="Nama produk" />
+        <input id="prodHarga" placeholder="Harga (angka)" />
+        <input id="prodImg" type="file" accept="image/*" />
+        <button onclick="tambahProduk()">Tambah Produk</button>
+      </div>
+
+      <div id="daftarProduk" class="small"></div>
+    </div>
+
+    <div style="width:420px">
+      <h3>Daftar Pesanan</h3>
+      <div id="daftarPesanan" style="max-height:420px;overflow:auto"></div>
+      <div class="center" style="margin-top:10px">
+        <button class="secondary" onclick="closeAdmin()">Tutup Admin</button>
+        <button style="margin-left:8px" onclick="exportOrders()">Export JSON</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div id="adminLogin" class="wrapper hidden">
+  <h2>Login Admin</h2>
+  <p class="small">Masukkan username & password admin</p>
+  <input id="adminUser" placeholder="Username admin" />
+  <input id="adminPass" type="password" placeholder="Password admin" />
+  <div class="flex">
+    <button onclick="loginAdmin()">Login</button>
+    <button class="secondary" onclick="hideAdminLogin()">Batal</button>
+  </div>
+  <p class="small">Default login: <strong>admin</strong><br>Password: <strong>admin</strong></p>
+</div>
+
+<script>
+const defaultProducts = [
+  {id:1,nama:'Burnt Cheesecake',harga:75000,img:'https://source.unsplash.com/400x300/?cheesecake'},
+  {id:2,nama:'Chiffon Cake (Vanilla)',harga:65000,img:'https://source.unsplash.com/400x300/?vanilla-cake'},
+  {id:3,nama:'Fudgy Brownies',harga:42000,img:'https://source.unsplash.com/400x300/?brownies'},
+];
+
+let products = loadProducts();
+let orders = loadOrders();
+let cart = {};
+let currentUserName = '';
+
+const ADMIN_USERNAME = 'admin';
+const ADMIN_PASSWORD = 'admin';
+
+function loadProducts(){
+  try{
+    const raw = localStorage.getItem('kuwepi_products');
+    if(raw) return JSON.parse(raw);
+  }catch(e){}
+  localStorage.setItem('kuwepi_products', JSON.stringify(defaultProducts));
+  return defaultProducts.slice();
+}
+
+function saveProducts(){ localStorage.setItem('kuwepi_products', JSON.stringify(products)); }
+function loadOrders(){ return JSON.parse(localStorage.getItem('kuwepi_orders')||"[]"); }
+function saveOrders(){ localStorage.setItem('kuwepi_orders', JSON.stringify(orders)); }
+
+function renderMenu(){
+  const g = document.getElementById('grid'); g.innerHTML='';
+  products.forEach(m=>{
+    g.innerHTML += `
+      <div class="card">
+        <img src="${m.img}" alt="${m.nama}">
+        <h4>${m.nama}</h4>
+        <p>Rp ${Number(m.harga).toLocaleString()}</p>
+        <button onclick="tambah(${m.id})">Tambah</button>
+      </div>`;
+  });
+  renderProductListAdmin();
+}
+
+function tambah(id){
+  cart[id]=(cart[id]||0)+1;
+  updateCart();
+}
+
+function updateCart(){
+  const wrap=document.getElementById('items'); wrap.innerHTML='';
+  let tot=0;
+  for(let id in cart){
+    const p=products.find(x=>x.id==id);
+    let qty=cart[id], sub=qty*p.harga;
+    tot+=sub;
+    wrap.innerHTML+=`${p.nama} x${qty} - Rp ${sub.toLocaleString()}<br>`;
+  }
+  document.getElementById('total').textContent='Rp '+tot.toLocaleString();
+  hitungKembalian();
+}
+
+function hitungKembalian(){
+  const total=Number(document.getElementById('total').textContent.replace(/[^\d]/g,''))||0;
+  const bayar=Number(document.getElementById('bayar').value||0);
+  const k=bayar-total;
+  document.getElementById('kembalian').textContent='Rp '+(k>0?k.toLocaleString():0);
+}
+
+function masuk(){
+  const n=document.getElementById('nama').value.trim();
+  const t=document.getElementById('telp').value.trim();
+  if(!n||!t) return alert("Isi nama & telepon!");
+  currentUserName=n;
+  document.getElementById('user').textContent=n+" ("+t+")";
+  document.getElementById('login').classList.add('hidden');
+  document.getElementById('app').classList.remove('hidden');
+  if(sessionStorage.getItem('kuwepi_admin')==='true') document.getElementById('adminQuick').classList.remove('hidden');
+  renderMenu();
+  updateCart();
+}
+
+function keluar(){
+  if(!confirm("Reset transaksi?"))return;
+  cart={}; updateCart();
+  document.getElementById('bayar').value='';
+  document.getElementById('kembalian').textContent='Rp 0';
+  currentUserName='';
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('login').classList.remove('hidden');
+}
+
+/* ------------------- UPLOAD GAMBAR (BASE64) ------------------- */
+function tambahProduk(){
+  const nama=document.getElementById('prodNama').value.trim();
+  const harga=Number(document.getElementById('prodHarga').value);
+  const fileInput=document.getElementById('prodImg');
+
+  if(!nama||!harga){
+    return alert("Nama dan harga wajib diisi!");
+  }
+
+  const newId = products.length ? Math.max(...products.map(p=>p.id))+1 : 1;
+
+  if(fileInput.files.length===0){
+    products.push({id:newId,nama,harga,img:"https://source.unsplash.com/400x300/?cake"});
+    saveProducts();
+    renderMenu();
+    renderProductListAdmin();
+    alert("Produk ditambahkan (tanpa gambar upload).");
+    return;
+  }
+
+  const file=fileInput.files[0];
+  const reader=new FileReader();
+
+  reader.onload=function(e){
+    const base64=e.target.result;
+    products.push({id:newId,nama,harga,img:base64});
+    saveProducts();
+    renderMenu();
+    renderProductListAdmin();
+    alert("Produk berhasil ditambahkan dengan gambar!");
+  };
+
+  reader.readAsDataURL(file);
+
+  document.getElementById('prodNama').value='';
+  document.getElementById('prodHarga').value='';
+  fileInput.value='';
+}
+
+function hapusProduk(id){
+  if(!confirm("Hapus produk?"))return;
+  products=products.filter(p=>p.id!=id);
+  saveProducts();
+  renderMenu();
+  renderProductListAdmin();
+}
+
+function renderProductListAdmin(){
+  const div=document.getElementById('daftarProduk'); div.innerHTML='';
+  if(products.length===0){div.innerHTML='<div class="small">Belum ada produk.</div>';return;}
+  let html='<table><thead><tr><th>Nama</th><th>Harga</th><th>Action</th></tr></thead><tbody>';
+  products.forEach(p=>{
+    html+=`<tr><td>${p.nama}</td><td>Rp ${p.harga.toLocaleString()}</td>
+    <td><button class="secondary" onclick="hapusProduk(${p.id})">Hapus</button></td></tr>`;
+  });
+  html+='</tbody></table>';
+  div.innerHTML=html;
+}
+
+function bukaCheckout(){
+  if(Object.keys(cart).length===0)return alert("Keranjang kosong!");
+  document.getElementById('app').classList.add('hidden');
+  document.getElementById('checkout').classList.remove('hidden');
+  tampilRingkasan();
+}
+
+function tampilRingkasan(){
+  const ring=document.getElementById('ringkasan'); ring.innerHTML='';
+  let tot=0;
+  for(let id in cart){
+    const p=products.find(x=>x.id==id);
+    const qty=cart[id], sub=p.harga*qty;
+    tot+=sub;
+    ring.innerHTML+=`<li>${p.nama} x${qty} - Rp ${sub.toLocaleString()}</li>`;
+  }
+  document.getElementById('totalC').textContent='Rp '+tot.toLocaleString();
+}
+
+function tampilInstruksi(){
+  const val=document.getElementById('metode').value;
+  const box=document.getElementById('instruksi');
+  box.innerHTML='';
+  if(val==="Bank Transfer") box.innerHTML="<p><strong>Transfer Bank</strong><br>BCA: 1234567890 a.n KUWEPI</p>";
+  if(val==="E-Wallet") box.innerHTML="<p><strong>E-Wallet</strong><br>DANA/OVO/GoPay: 081234567890</p>";
+  if(val==="QRIS") box.innerHTML=`<p><strong>QRIS</strong></p>
+  <div class='qr'><img src='https://api.qrserver.com/v1/create-qr-code/?size=180x180&data=KUWEPI'></div>`;
+  if(val==="COD") box.innerHTML="<p><strong>COD</strong><br>Bayar di tempat.</p>";
+}
+
+function konfirmasi(){
+  const nama=document.getElementById('namaPembeli').value.trim();
+  const alamat=document.getElementById('alamatPembeli').value.trim();
+  const telp=document.getElementById('telpPembeli').value.trim();
+  const metode=document.getElementById('metode').value;
+
+  if(!nama||!alamat||!telp||!metode)return alert("Lengkapi semua data!");
+
+  let total=0;
+  const items=[];
+  for(let id in cart){
+    const p=products.find(x=>x.id==id);
+    items.push({id:p.id,nama:p.nama,harga:p.harga,jumlah:cart[id]});
+    total+=p.harga*cart[id];
+  }
+
+  const order={
+    id:"ORD"+Date.now(),
+    waktu:new Date().toISOString(),
+    pembeli:{nama,alamat,telp},
+    items,total,metode
+  };
+
+  orders.unshift(order); saveOrders();
+  tampilInvoice(order);
+  cart={}; updateCart();
+}
+
+function tampilInvoice(order){
+  document.getElementById('checkout').classList.add('hidden');
+  document.getElementById('invoice').classList.remove('hidden');
+
+  document.getElementById('trx').textContent=order.id;
+  document.getElementById('tgl').textContent=new Date(order.waktu).toLocaleString('id-ID');
+  document.getElementById('namaI').textContent=order.pembeli.nama;
+  document.getElementById('alamatI').textContent=order.pembeli.alamat;
+  document.getElementById('telpI').textContent=order.pembeli.telp;
+  document.getElementById('metodeI').textContent=order.metode;
+
+  const list=document.getElementById('pesananI'); list.innerHTML='';
+  order.items.forEach(it=>{
+    list.innerHTML+=`<li>${it.nama} x${it.jumlah} - Rp ${(it.jumlah*it.harga).toLocaleString()}</li>`;
+  });
+  document.getElementById('totalI').textContent='Rp '+order.total.toLocaleString();
+}
+
+function renderOrdersAdmin(){
+  const div=document.getElementById('daftarPesanan'); div.innerHTML='';
+  if(orders.length===0){div.innerHTML='<div class="small">Belum ada pesanan.</div>';return;}
+  let html='<table><thead><tr><th>ID</th><th>Pembeli</th><th>Total</th><th>Metode</th><th>Waktu</th></tr></thead><tbody>';
+  orders.forEach(o=>{
+    html+=`<tr>
+      <td>${o.id}</td>
+      <td>${o.pembeli.nama}<br><span class="small">${o.pembeli.alamat}</span></td>
+      <td>Rp ${o.total.toLocaleString()}</td>
+      <td>${o.metode}</td>
+      <td class="small">${new Date(o.waktu).toLocaleString('id-ID')}</td>
+    </tr>`;
+  });
+  html+='</tbody></table>';
+  div.innerHTML=html;
+}
+
+function exportOrders(){
+  const blob=new Blob([JSON.stringify(orders,null,2)],{type:"application/json"});
+  const url=URL.createObjectURL(blob);
+  const a=document.createElement('a');
+  a.href=url; a.download="orders_kuwepi.json"; a.click();
+  URL.revokeObjectURL(url);
+}
+
+function openAdminPanel(){
+  hideAllPages();
+  document.getElementById('adminPanel').classList.remove('hidden');
+  renderProductListAdmin();
+  renderOrdersAdmin();
+}
+
+function closeAdmin(){
+  document.getElementById('adminPanel').classList.add('hidden');
+  if(currentUserName){
+    document.getElementById('app').classList.remove('hidden');
+    if(sessionStorage.getItem('kuwepi_admin')==='true') document.getElementById('adminQuick').classList.remove('hidden');
+  } else {
+    document.getElementById('login').classList.remove('hidden');
+  }
+}
+
+function showAdminLogin(){
+  hideAllPages();
+  document.getElementById('adminLogin').classList.remove('hidden');
+}
+
+function hideAdminLogin(){
+  document.getElementById('adminLogin').classList.add('hidden');
+  if(currentUserName) document.getElementById('app').classList.remove('hidden');
+  else document.getElementById('login').classList.remove('hidden');
+}
+
+function loginAdmin(){
+  const u=document.getElementById('adminUser').value.trim();
+  const p=document.getElementById('adminPass').value;
+  if(u===ADMIN_USERNAME && p===ADMIN_PASSWORD){
+    sessionStorage.setItem('kuwepi_admin','true');
+    alert("Login admin berhasil!");
+    openAdminPanel();
+  } else alert("Username / password salah!");
+}
+
+function logoutAdmin(){
+  sessionStorage.removeItem('kuwepi_admin');
+  alert("Admin logout.");
+  document.getElementById('adminQuick').classList.add('hidden');
+  closeAdmin();
+}
+
+function hideAllPages(){
+  ['login','app','checkout','invoice','adminPanel','adminLogin'].forEach(id=>{
+    document.getElementById(id).classList.add('hidden');
+  });
+}
+
+(function init(){
+  renderMenu();
+  document.getElementById('login').classList.remove('hidden');
+})();
+</script>
+
+</body>
+</html>
